@@ -1,0 +1,36 @@
+{
+  "name": "three-dimensioning-arrow",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "install:ncu": "npm install -g npm-check-updates",
+    "install:webpack": "npm install --save-dev webpack",
+    "update:modules": "ncu -u && npm update && npm i",
+    "build:client": "webpack --config ./src/client/webpack.prod.js",
+    "build:server": "tsc -p ./src/server",
+    "build": "npm run build:client && npm run build:server",
+    "dev": "webpack serve --config ./src/client/webpack.dev.js",
+    "start": "node ./dist/server/threeServer.js"
+  },
+  "author": "Rabbid76",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/dat.gui": "^0.7.9",
+    "@types/express": "^4.17.17",
+    "@types/node": "^18.15.11",
+    "@types/three": "^0.150.1",
+    "copyfiles": "^2.4.1",
+    "dat.gui": "^0.7.9",
+    "install-peers": "^1.0.4",
+    "three": "^0.151.3",
+    "ts-loader": "^9.4.2",
+    "typescript": "^5.0.4",
+    "webpack": "^5.78.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-dev-server": "^4.13.2",
+    "webpack-merge": "^5.8.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
