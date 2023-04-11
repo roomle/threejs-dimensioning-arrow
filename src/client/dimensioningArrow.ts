@@ -16,6 +16,7 @@ import {
     Vector3,
     WebGLRenderer,
 } from 'three';
+import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 export interface DimensioningArrowParameters {
     shaftPixelWidth: number;
@@ -23,20 +24,27 @@ export interface DimensioningArrowParameters {
     arrowPixelWidth: number;
     arrowPixelHeight: number;
     color: ColorRepresentation;
+    labelClass: string;
+    deviceRatio: number;
+    autoLabelTextUpdate: boolean;
+    autoLabelRotationUpdate: boolean;
 }
 
 export class DimensioningArrow extends Group {
     public parameters: DimensioningArrowParameters;
+    public arrowNeedsUpdate: boolean = true;
     public startPosition: Vector3;
     public endPosition: Vector3;
-    public startShaft: Mesh;
-    public endShaft: Mesh;
-    public startShaftMaterial: DimensioningArrowShaftMaterial;
-    public endShaftMaterial: DimensioningArrowShaftMaterial;
-    public startArrow: Mesh;
-    public endArrow: Mesh;
-    public startArrowMaterial: DimensioningArrowMaterial;
-    public endArrowMaterial: DimensioningArrowMaterial;
+    private startShaft: Mesh;
+    private endShaft: Mesh;
+    private startShaftMaterial: DimensioningArrowShaftMaterial;
+    private endShaftMaterial: DimensioningArrowShaftMaterial;
+    private startArrow: Mesh;
+    private endArrow: Mesh;
+    private startArrowMaterial: DimensioningArrowMaterial;
+    private endArrowMaterial: DimensioningArrowMaterial;
+    private arrowLabel: CSS2DObject;
+    private labelTextClientWidth: number = 0;
 
     constructor(start: Vector3, end: Vector3, parameters?: any) {
         super();
@@ -48,6 +56,10 @@ export class DimensioningArrow extends Group {
             arrowPixelWidth: 30.0,
             arrowPixelHeight: 50.0,
             color: 0x000000,
+            labelClass: 'label',
+            deviceRatio: 1,
+            autoLabelTextUpdate: true,
+            autoLabelRotationUpdate: true,
             ...parameters,
         }
         this.startShaftMaterial = new DimensioningArrowShaftMaterial();
@@ -74,19 +86,85 @@ export class DimensioningArrow extends Group {
             this.updateArrowMaterial(false, renderer, camera, material);
         };
         this.add(this.endArrow);
+        this.arrowLabel = this.createArrowLabel('0.000', this.parameters);
+        this.add(this.arrowLabel);
         this.updateArrow();
     }
 
+    private createArrowLabel(text: string, parameters?: any): CSS2DObject {
+        const outerLabelDiv = document.createElement('div');
+        const labelDiv = document.createElement('div');
+        outerLabelDiv.appendChild(labelDiv);
+        labelDiv.className = parameters.labelClass ?? '';
+        labelDiv.textContent = text;
+        labelDiv.style.backgroundColor = 'transparent';
+        labelDiv.style.color = new Color(parameters.color ?? 0x000000).getStyle();
+        const labelObject = new CSS2DObject(outerLabelDiv);
+        labelObject.position.set(0, 0, 0);
+        // @ts-ignore
+        labelObject.center.set(parameters.origin?.x ?? 0.5, parameters.origin?.y ?? 0.5);
+        labelObject.layers.set(0);
+        return labelObject;
+    }
+
+    public setPosition(start: Vector3, end: Vector3, offsetStart: number = 0, offsetEnd: number = 0) {
+        const direction = end.clone().sub(start).normalize();
+        this.startPosition.copy(start.clone().add(direction.clone().multiplyScalar(offsetStart)));
+        this.endPosition.copy(end.clone().add(direction.clone().multiplyScalar(-offsetEnd)));
+        this.arrowNeedsUpdate = true;
+    }
+
+    public setAngle(angleDegree: number) {
+        const rotateStyle = `${angleDegree.toFixed(0)}deg`;
+        const labelDiv = this.arrowLabel.element.children[0] as HTMLDivElement;
+        labelDiv.style.rotate = rotateStyle;
+    } 
+
+    public setLabel(text: string) {
+        const labelDiv = this.arrowLabel.element.children[0] as HTMLDivElement;
+        labelDiv.textContent = text;
+        this.labelTextClientWidth = labelDiv.clientWidth * this.parameters.deviceRatio;
+    }
+
     public updateArrow() {
-        const direction = this.endPosition.clone().sub(this.startPosition);
+        const start = this.startPosition.clone().applyMatrix4(this.matrixWorld);
+        const end = this.endPosition.clone().applyMatrix4(this.matrixWorld);
+        const direction = end.clone().sub(start);
         const length = direction.length();
         direction.multiplyScalar(1 / length);
         const rotationAxis = new Vector3(0, 1, 0).cross(direction);
         const rotationAngle = Math.acos(new Vector3(0, 1, 0).dot(direction));
-        this.setModelMatrix(this.startShaft, this.startPosition, length, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.endShaft, this.endPosition, length, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.startArrow, this.startPosition, 1, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.endArrow, this.endPosition, 1, rotationAxis, rotationAngle + Math.PI);
+        this.setModelMatrix(this.startShaft, start, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.endShaft, end, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.startArrow, start, 1, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.endArrow, end, 1, rotationAxis, rotationAngle + Math.PI);
+    }
+
+    public updateArrowLabel(renderer: WebGLRenderer, camera: Camera) {
+        const distanceText = this.startPosition.distanceTo(this.endPosition).toFixed(3);
+        const start = this.startPosition.clone()
+            .applyMatrix4(this.matrixWorld)
+            .applyMatrix4(camera.matrixWorldInverse)
+            .applyMatrix4(camera.projectionMatrix);
+        const end = this.endPosition.clone()
+            .applyMatrix4(this.matrixWorld)
+            .applyMatrix4(camera.matrixWorldInverse)
+            .applyMatrix4(camera.projectionMatrix);
+        const center = end.clone().add(start).multiplyScalar(0.5)
+            .applyMatrix4(camera.projectionMatrixInverse)
+            .applyMatrix4(camera.matrixWorld);
+        this.arrowLabel.position.copy(center);
+        const renderTarget = renderer.getRenderTarget();
+        const width = renderTarget?.width ?? renderer.domElement.clientWidth;
+        const height = renderTarget?.height ?? renderer.domElement.clientHeight;
+        const direction = end.clone().sub(start);
+        const angle = Math.atan2(-direction.y, direction.x * width / height) * 180 / Math.PI;
+        if (this.parameters.autoLabelRotationUpdate) {
+            this.setAngle(angle);
+        }
+        if (this.parameters.autoLabelTextUpdate) {
+            this.setLabel(distanceText);
+        }
     }
 
     private setModelMatrix(object: Object3D, start: Vector3, length: number, rotationAxis: Vector3, rotationAngle: number) {
@@ -99,40 +177,57 @@ export class DimensioningArrow extends Group {
     }
 
     public updateShaftMaterial(startArrow: boolean, renderer: WebGLRenderer, camera: Camera, material: Material) {
+        this.updateMatrixWorld();
         if (material instanceof DimensioningArrowShaftMaterial) {
             const renderTarget = renderer.getRenderTarget();
             const viewportSize = new Vector2();
             renderer.getSize(viewportSize);
             const width = renderTarget?.width ?? viewportSize.x;
             const height = renderTarget?.height ?? viewportSize.y;
+            const start = this.startPosition.clone().applyMatrix4(this.matrixWorld);
+            const end = this.endPosition.clone().applyMatrix4(this.matrixWorld);
             material.update({
                 width,
                 height,
                 camera,
-                start: startArrow ? this.startPosition : this.endPosition,
-                end: startArrow ? this.endPosition : this.startPosition,
+                start: startArrow ? start : end,
+                end: startArrow ? end : start,
                 shaftPixelWidth: this.parameters.shaftPixelWidth,
                 shaftPixelOffset: this.parameters.shaftPixelOffset,
                 arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
+                labelPixelWidth: this.labelTextClientWidth,
                 color: this.parameters.color,
             });
+        }
+        if (this.arrowNeedsUpdate) {
+            this.arrowNeedsUpdate = false;
+            this.updateArrowLabel(renderer, camera);
+            this.updateArrow();
         }
     }
 
     public updateArrowMaterial(startArrow: boolean, renderer: WebGLRenderer, camera: Camera, material: Material) {
+        this.updateMatrixWorld();
         if (material instanceof DimensioningArrowMaterial) {
             const renderTarget = renderer.getRenderTarget();
             const width = renderTarget?.width ?? renderer.domElement.clientWidth;
             const height = renderTarget?.height ?? renderer.domElement.clientHeight;
+            const start = this.startPosition.clone().applyMatrix4(this.matrixWorld);
+            const end = this.endPosition.clone().applyMatrix4(this.matrixWorld);
             material.update({
                 width,
                 height,
                 camera,
-                start: startArrow ? this.startPosition : this.endPosition,
-                end: startArrow ? this.endPosition : this.startPosition,
+                start: startArrow ? start : end,
+                end: startArrow ? end : start,
                 arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
                 color: this.parameters.color,
             });
+        }
+        if (this.arrowNeedsUpdate) {
+            this.arrowNeedsUpdate = false;
+            this.updateArrowLabel(renderer, camera);
+            this.updateArrow();
         }
     }
 }
@@ -148,6 +243,7 @@ uniform vec3 end;
 uniform float shaftPixelWidth;
 uniform float shaftPixelOffset;
 uniform vec2 arrowPixelSize;
+uniform float labelPixelWidth;
 
 vec2 pixelToNdcScale(vec4 hVec) {
     return vec2(2.0 * hVec.w) / resolution.xy;
@@ -159,7 +255,9 @@ void main() {
     vec4 clipStart = projectionMatrix * viewMatrix * vec4(start, 1.0);
     vec4 clipEnd = projectionMatrix * viewMatrix * vec4(end, 1.0);
     vec2 clipDir = normalize((clipEnd.xy / clipEnd.w - clipStart.xy / clipStart.w) * resolution.xy);
-    gl_Position.xy = mix(clipStart.xy / clipStart.w, clipEnd.xy / clipEnd.w, position.y * 0.5) * gl_Position.w;
+    vec4 shaftEnd = vec4(clipEnd.xy / clipEnd.w * clipStart.w, clipStart.zw);
+    shaftEnd.xy -= clipDir * (labelPixelWidth * 0.5 + shaftPixelOffset) * pixelToNdcScale(gl_Position);
+    gl_Position.xy = mix(clipStart.xy / clipStart.w, shaftEnd.xy / shaftEnd.w, position.y * 0.5) * gl_Position.w;
     gl_Position.xy += vec2(-clipDir.y, clipDir.x) * position.x * shaftPixelWidth * 0.5 * pixelToNdcScale(gl_Position);
 
     vec4 clipCenter = clipStart;
@@ -193,6 +291,7 @@ export class DimensioningArrowShaftMaterial extends ShaderMaterial {
             shaftPixelWidth: { value: 10.0 },
             shaftPixelOffset: { value: 10.0 },
             arrowPixelSize: { value: new Vector2() },
+            labelPixelWidth: { value: 0 },
             color: { value: new Color() },
         },
         defines: {
@@ -208,8 +307,8 @@ export class DimensioningArrowShaftMaterial extends ShaderMaterial {
             uniforms: UniformsUtils.clone(DimensioningArrowShaftMaterial.shader.uniforms),
             vertexShader: DimensioningArrowShaftMaterial.shader.vertexShader,
             fragmentShader: DimensioningArrowShaftMaterial.shader.fragmentShader,
+            side: DoubleSide,
             blending: NoBlending,
-            side: DoubleSide
         });
         this.update(parameters);
     }
@@ -234,6 +333,9 @@ export class DimensioningArrowShaftMaterial extends ShaderMaterial {
         }
         if (parameters?.arrowPixelSize !== undefined) {
             this.uniforms.arrowPixelSize.value.copy(parameters.arrowPixelSize);
+        }
+        if (parameters?.labelPixelWidth !== undefined) {
+            this.uniforms.labelPixelWidth.value = parameters.labelPixelWidth;
         }
         if (parameters?.color !== undefined) {
             this.uniforms.color.value = new Color(parameters.color);
@@ -312,8 +414,8 @@ export class DimensioningArrowMaterial extends ShaderMaterial {
             uniforms: UniformsUtils.clone(DimensioningArrowMaterial.shader.uniforms),
             vertexShader: DimensioningArrowMaterial.shader.vertexShader,
             fragmentShader: DimensioningArrowMaterial.shader.fragmentShader,
+            side: DoubleSide,
             blending: NoBlending,
-            side: DoubleSide
         });
         this.update(parameters);
     }

@@ -10,7 +10,8 @@
     "build:server": "tsc -p ./src/server",
     "build": "npm run build:client && npm run build:server",
     "dev": "webpack serve --config ./src/client/webpack.dev.js",
-    "start": "node ./dist/server/threeServer.js"
+    "start": "node ./dist/server/threeServer.js",
+    "copy:deploy": "copyfiles --flat ./dist/client/*.js ./deployment"
   },
   "author": "Rabbid76",
   "license": "ISC",

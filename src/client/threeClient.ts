@@ -13,9 +13,9 @@ import {
     Scene,
     ShadowMaterial,
     SphereGeometry,
-    Vector3,
     WebGLRenderer,
 } from 'three';
+import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -23,7 +23,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import Stats from 'three/examples/jsm/libs/stats.module' 
 import { GUI } from 'dat.gui'
 
-export const helloCube = (canvas: any) => {
+export const dimensioning = (canvas: any) => {
     const renderer = new WebGLRenderer({canvas: canvas, antialias: true, alpha: true});
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
@@ -32,11 +32,16 @@ export const helloCube = (canvas: any) => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     //renderer.outputEncoding = sRGBEncoding;
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    document.body.appendChild(labelRenderer.domElement);
 
     const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.y = 3;
     camera.position.z = 6;
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, labelRenderer.domElement);
 
     const scene = new Scene();
     scene.background = new Color(0xffffff);
@@ -46,8 +51,10 @@ export const helloCube = (canvas: any) => {
     //scene.background = environmentTexture;
 
     const gridHelper = new GridHelper(10, 10);
+    //gridHelper.visible = false;
     scene.add(gridHelper);
     const axesHelper = new AxesHelper(2);
+    //axesHelper.visible = false;
     scene.add(axesHelper);
 
     const directionalLight = new DirectionalLight(0xffffff, 0.5);
@@ -65,9 +72,10 @@ export const helloCube = (canvas: any) => {
     const material = new MeshPhysicalMaterial({color: 0xe02020});
     const geometry = new SphereGeometry(0.1, 32, 16);
     const startMesh = new Mesh(geometry, material);
-    startMesh.position.set(0, 0, 3);
+    startMesh.position.set(-1.6, 0, 0);
+    //startMesh.visible = false;
     scene.add(startMesh);
-    const startMeshTransformControl = new TransformControls(camera, renderer.domElement);
+    const startMeshTransformControl = new TransformControls(camera, labelRenderer.domElement);
     startMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
         controls.enabled = !event.value;
     });
@@ -75,9 +83,10 @@ export const helloCube = (canvas: any) => {
     startMeshTransformControl.visible = false;
     scene.add(startMeshTransformControl);
     const endMesh = new Mesh(geometry, material);
-    endMesh.position.set(3, 0, 0);
+    endMesh.position.set(1.6, 0, 0);
+    //endMesh.visible = false;
     scene.add(endMesh);
-    const endMeshTransformControl = new TransformControls(camera, renderer.domElement);
+    const endMeshTransformControl = new TransformControls(camera, labelRenderer.domElement);
     endMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
         controls.enabled = !event.value;
     });
@@ -86,16 +95,17 @@ export const helloCube = (canvas: any) => {
     scene.add(endMeshTransformControl);
 
     const dimensioningArrow = new DimensioningArrow(startMesh.position, endMesh.position, { 
-        color: 0x000000,
+        color: 0x00000,
         arrowPixelWidth: 30.0,
-        arrowPixelHeight: 50.0, 
+        arrowPixelHeight: 50.0,
+        shaftPixelWidth: 10.0,
+        shaftPixelOffset: 3.0, 
+        labelClass: 'label',
+        deviceRatio: window.devicePixelRatio,
     });
     scene.add(dimensioningArrow);
     const updateDimensioning = () => {
-        const direction = endMesh.position.clone().sub(startMesh.position).normalize();
-        dimensioningArrow.startPosition.copy(startMesh.position.clone().add(direction.clone().multiplyScalar(0.1)));
-        dimensioningArrow.endPosition.copy(endMesh.position.clone().add(direction.clone().multiplyScalar(-0.1)));
-        dimensioningArrow.updateArrow(); // TODO needsUpdate
+        dimensioningArrow.setPosition(startMesh.position, endMesh.position, 0.1, 0.1);
     }
 
     // @ts-ignore
@@ -115,6 +125,7 @@ export const helloCube = (canvas: any) => {
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
+        labelRenderer.setSize(width, height);
     }, false);
 
     let previousTimeStamp: number | undefined;
@@ -131,9 +142,10 @@ export const helloCube = (canvas: any) => {
 
     const render = () => {
         renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
     }
     requestAnimationFrame(animate);
 }
 
 // @ts-ignore
-helloCube(three_canvas);
+dimensioning(three_canvas);
