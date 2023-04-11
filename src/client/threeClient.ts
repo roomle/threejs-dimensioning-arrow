@@ -1,11 +1,9 @@
 import { DimensioningArrow } from './dimensioningArrow';
 import {
     AxesHelper,
-    BoxGeometry,
     Color,
     DirectionalLight,
     GridHelper,
-    LinearEncoding,
     Mesh,
     MeshPhysicalMaterial,
     PerspectiveCamera,
@@ -14,7 +12,7 @@ import {
     PMREMGenerator,
     Scene,
     ShadowMaterial,
-    sRGBEncoding,
+    SphereGeometry,
     Vector3,
     WebGLRenderer,
 } from 'three';
@@ -56,13 +54,6 @@ export const helloCube = (canvas: any) => {
     directionalLight.position.set(1, 3, 1);
     directionalLight.castShadow = true;
     scene.add(directionalLight);
-    const lightTransformControl = new TransformControls(camera, renderer.domElement);
-    lightTransformControl.addEventListener( 'dragging-changed', (event: any) => {
-        controls.enabled = !event.value;
-    });
-    lightTransformControl.attach(directionalLight);
-    lightTransformControl.visible = false;
-    scene.add(lightTransformControl);
     
     const groundGeometry = new PlaneGeometry(10, 10);
     groundGeometry.rotateX(-Math.PI / 2);
@@ -71,38 +62,52 @@ export const helloCube = (canvas: any) => {
     groundMesh.receiveShadow = true;
     scene.add(groundMesh);
 
-    const geometry = new BoxGeometry(1, 1, 1);
     const material = new MeshPhysicalMaterial({color: 0xe02020});
-    const mesh = new Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.position.y = 0.5;
-    scene.add(mesh);
-    const meshTransformControl = new TransformControls(camera, renderer.domElement);
-    meshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
+    const geometry = new SphereGeometry(0.1, 32, 16);
+    const startMesh = new Mesh(geometry, material);
+    startMesh.position.set(0, 0, 3);
+    scene.add(startMesh);
+    const startMeshTransformControl = new TransformControls(camera, renderer.domElement);
+    startMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
         controls.enabled = !event.value;
     });
-    meshTransformControl.attach(mesh);
-    meshTransformControl.visible = false;
-    scene.add(meshTransformControl);
+    startMeshTransformControl.attach(startMesh);
+    startMeshTransformControl.visible = false;
+    scene.add(startMeshTransformControl);
+    const endMesh = new Mesh(geometry, material);
+    endMesh.position.set(3, 0, 0);
+    scene.add(endMesh);
+    const endMeshTransformControl = new TransformControls(camera, renderer.domElement);
+    endMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
+        controls.enabled = !event.value;
+    });
+    endMeshTransformControl.attach(endMesh);
+    endMeshTransformControl.visible = false;
+    scene.add(endMeshTransformControl);
 
-    const arrow = new DimensioningArrow(new Vector3(1.5, 0, 1.5), new Vector3(3, 0, 0), { 
+    const dimensioningArrow = new DimensioningArrow(startMesh.position, endMesh.position, { 
         color: 0x000000,
         arrowPixelWidth: 30.0,
         arrowPixelHeight: 50.0, 
     });
-    scene.add(arrow);
+    scene.add(dimensioningArrow);
+    const updateDimensioning = () => {
+        const direction = endMesh.position.clone().sub(startMesh.position).normalize();
+        dimensioningArrow.startPosition.copy(startMesh.position.clone().add(direction.clone().multiplyScalar(0.1)));
+        dimensioningArrow.endPosition.copy(endMesh.position.clone().add(direction.clone().multiplyScalar(-0.1)));
+        dimensioningArrow.updateArrow(); // TODO needsUpdate
+    }
 
     // @ts-ignore
     const stats = new Stats();
     document.body.appendChild(stats.dom);
     const gui = new GUI();
     const uiProperties = {
-        'mesh transform control': meshTransformControl.visible,
-        'light transform control': lightTransformControl.visible,
+        'mesh transform control': startMeshTransformControl.visible,
     }
-    gui.add(uiProperties, 'mesh transform control').onChange((value) => meshTransformControl.visible = value);
-    gui.add(uiProperties, 'light transform control').onChange((value) => lightTransformControl.visible = value);
+    gui.add(uiProperties, 'mesh transform control').onChange((value) => {
+        startMeshTransformControl.visible = value;
+    });
 
     window.addEventListener('resize', () => {
         const width = window.innerWidth;
@@ -119,6 +124,7 @@ export const helloCube = (canvas: any) => {
         requestAnimationFrame(animate);
         //mesh.rotation.y += 45 * Math.PI / 180 * deltaTimeMs / 1000;
         controls.update();
+        updateDimensioning();
         render();
         stats.update()
     }

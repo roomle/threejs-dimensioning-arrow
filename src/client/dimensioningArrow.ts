@@ -27,8 +27,8 @@ export interface DimensioningArrowParameters {
 
 export class DimensioningArrow extends Group {
     public parameters: DimensioningArrowParameters;
-    public start: Vector3;
-    public end: Vector3;
+    public startPosition: Vector3;
+    public endPosition: Vector3;
     public startShaft: Mesh;
     public endShaft: Mesh;
     public startShaftMaterial: DimensioningArrowShaftMaterial;
@@ -40,8 +40,8 @@ export class DimensioningArrow extends Group {
 
     constructor(start: Vector3, end: Vector3, parameters?: any) {
         super();
-        this.start = start.clone();
-        this.end = end.clone();
+        this.startPosition = start.clone();
+        this.endPosition = end.clone();
         this.parameters = {
             shaftPixelWidth: 10.0,
             shaftPixelOffset: 3.0,
@@ -78,15 +78,15 @@ export class DimensioningArrow extends Group {
     }
 
     public updateArrow() {
-        const direction = this.end.clone().sub(this.start);
+        const direction = this.endPosition.clone().sub(this.startPosition);
         const length = direction.length();
         direction.multiplyScalar(1 / length);
         const rotationAxis = new Vector3(0, 1, 0).cross(direction);
         const rotationAngle = Math.acos(new Vector3(0, 1, 0).dot(direction));
-        this.setModelMatrix(this.startShaft, this.start, length, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.endShaft, this.end, length, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.startArrow, this.start, 1, rotationAxis, rotationAngle);
-        this.setModelMatrix(this.endArrow, this.end, 1, rotationAxis, rotationAngle + Math.PI);
+        this.setModelMatrix(this.startShaft, this.startPosition, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.endShaft, this.endPosition, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.startArrow, this.startPosition, 1, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.endArrow, this.endPosition, 1, rotationAxis, rotationAngle + Math.PI);
     }
 
     private setModelMatrix(object: Object3D, start: Vector3, length: number, rotationAxis: Vector3, rotationAngle: number) {
@@ -109,8 +109,8 @@ export class DimensioningArrow extends Group {
                 width,
                 height,
                 camera,
-                start: startArrow ? this.start : this.end,
-                end: startArrow ? this.end : this.start,
+                start: startArrow ? this.startPosition : this.endPosition,
+                end: startArrow ? this.endPosition : this.startPosition,
                 shaftPixelWidth: this.parameters.shaftPixelWidth,
                 shaftPixelOffset: this.parameters.shaftPixelOffset,
                 arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
@@ -128,8 +128,8 @@ export class DimensioningArrow extends Group {
                 width,
                 height,
                 camera,
-                start: startArrow ? this.start : this.end,
-                end: startArrow ? this.end : this.start,
+                start: startArrow ? this.startPosition : this.endPosition,
+                end: startArrow ? this.endPosition : this.startPosition,
                 arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
                 color: this.parameters.color,
             });
