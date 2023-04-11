@@ -19,6 +19,7 @@ import {
 
 export interface DimensioningArrowParameters {
     shaftPixelWidth: number;
+    shaftPixelOffset: number;
     arrowPixelWidth: number;
     arrowPixelHeight: number;
     color: ColorRepresentation;
@@ -28,11 +29,14 @@ export class DimensioningArrow extends Group {
     public parameters: DimensioningArrowParameters;
     public start: Vector3;
     public end: Vector3;
-    public shaft: Mesh;
-    public shaftMaterial: DimensioningArrowShaftMaterial;
+    public startShaft: Mesh;
+    public endShaft: Mesh;
+    public startShaftMaterial: DimensioningArrowShaftMaterial;
+    public endShaftMaterial: DimensioningArrowShaftMaterial;
     public startArrow: Mesh;
     public endArrow: Mesh;
-    public arrowMaterial: DimensioningArrowMaterial;
+    public startArrowMaterial: DimensioningArrowMaterial;
+    public endArrowMaterial: DimensioningArrowMaterial;
 
     constructor(start: Vector3, end: Vector3, parameters?: any) {
         super();
@@ -40,24 +44,32 @@ export class DimensioningArrow extends Group {
         this.end = end.clone();
         this.parameters = {
             shaftPixelWidth: 10.0,
+            shaftPixelOffset: 3.0,
             arrowPixelWidth: 30.0,
             arrowPixelHeight: 50.0,
             color: 0x000000,
             ...parameters,
         }
-        this.shaftMaterial = new DimensioningArrowShaftMaterial();
-        this.shaft = new Mesh(new PlaneGeometry(2, 2).translate(0, 1, 0), this.shaftMaterial);
-        this.shaft.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
-            this.updateShaftMaterial(renderer, camera, material);
+        this.startShaftMaterial = new DimensioningArrowShaftMaterial();
+        this.startShaft = new Mesh(new PlaneGeometry(2, 1).translate(0, 0.5, 0), this.startShaftMaterial);
+        this.startShaft.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
+            this.updateShaftMaterial(true, renderer, camera, material);
         };
-        this.add(this.shaft);
-        this.arrowMaterial = new DimensioningArrowMaterial();
-        this.startArrow = new Mesh(new PlaneGeometry(2, 1).translate(0, 0.5, 0), this.arrowMaterial);
+        this.add(this.startShaft);
+        this.endShaftMaterial = new DimensioningArrowShaftMaterial();
+        this.endShaft = new Mesh(new PlaneGeometry(2, 1).translate(0, 0.5, 0), this.endShaftMaterial);
+        this.endShaft.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
+            this.updateShaftMaterial(false, renderer, camera, material);
+        };
+        this.add(this.endShaft);
+        this.startArrowMaterial = new DimensioningArrowMaterial();
+        this.startArrow = new Mesh(new PlaneGeometry(2, 1).translate(0, 0.5, 0), this.startArrowMaterial);
         this.startArrow.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
             this.updateArrowMaterial(true, renderer, camera, material);
         };
         this.add(this.startArrow);
-        this.endArrow = new Mesh(new PlaneGeometry(2, 1).translate(0, -0.5, 0), this.arrowMaterial);
+        this.endArrowMaterial = new DimensioningArrowMaterial();
+        this.endArrow = new Mesh(new PlaneGeometry(2, 1).translate(0, 0.5, 0), this.endArrowMaterial);
         this.endArrow.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
             this.updateArrowMaterial(false, renderer, camera, material);
         };
@@ -71,7 +83,8 @@ export class DimensioningArrow extends Group {
         direction.multiplyScalar(1 / length);
         const rotationAxis = new Vector3(0, 1, 0).cross(direction);
         const rotationAngle = Math.acos(new Vector3(0, 1, 0).dot(direction));
-        this.setModelMatrix(this.shaft, this.start, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.startShaft, this.start, length, rotationAxis, rotationAngle);
+        this.setModelMatrix(this.endShaft, this.end, length, rotationAxis, rotationAngle);
         this.setModelMatrix(this.startArrow, this.start, 1, rotationAxis, rotationAngle);
         this.setModelMatrix(this.endArrow, this.end, 1, rotationAxis, rotationAngle + Math.PI);
     }
@@ -85,18 +98,22 @@ export class DimensioningArrow extends Group {
         object.applyMatrix4(new Matrix4().makeTranslation(start.x, start.y, start.z));
     }
 
-    public updateShaftMaterial(renderer: WebGLRenderer, camera: Camera, material: Material) {
+    public updateShaftMaterial(startArrow: boolean, renderer: WebGLRenderer, camera: Camera, material: Material) {
         if (material instanceof DimensioningArrowShaftMaterial) {
             const renderTarget = renderer.getRenderTarget();
-            const width = renderTarget?.width ?? renderer.domElement.clientWidth;
-            const height = renderTarget?.height ?? renderer.domElement.clientHeight;
+            const viewportSize = new Vector2();
+            renderer.getSize(viewportSize);
+            const width = renderTarget?.width ?? viewportSize.x;
+            const height = renderTarget?.height ?? viewportSize.y;
             material.update({
                 width,
                 height,
                 camera,
-                start: this.start,
-                end: this.end,
+                start: startArrow ? this.start : this.end,
+                end: startArrow ? this.end : this.start,
                 shaftPixelWidth: this.parameters.shaftPixelWidth,
+                shaftPixelOffset: this.parameters.shaftPixelOffset,
+                arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
                 color: this.parameters.color,
             });
         }
@@ -113,8 +130,7 @@ export class DimensioningArrow extends Group {
                 camera,
                 start: startArrow ? this.start : this.end,
                 end: startArrow ? this.end : this.start,
-                arrowPixelWidth: this.parameters.arrowPixelWidth,
-                arrowPixelHeight: this.parameters.arrowPixelHeight,
+                arrowPixelSize: new Vector2(this.parameters.arrowPixelWidth, this.parameters.arrowPixelHeight),
                 color: this.parameters.color,
             });
         }
@@ -122,35 +138,65 @@ export class DimensioningArrow extends Group {
 }
 
 const glslShaftVertexShader = 
-`uniform vec2 resolution;
+`varying vec2 centerPixel;
+varying vec2 posPixel;
+varying vec2 arrowDir;
+
+uniform vec2 resolution;
 uniform vec3 start;
 uniform vec3 end;
 uniform float shaftPixelWidth;
+uniform float shaftPixelOffset;
+uniform vec2 arrowPixelSize;
+
+vec2 pixelToNdcScale(vec4 hVec) {
+    return vec2(2.0 * hVec.w) / resolution.xy;
+}
 
 void main() {
-    vec4 viewPos = modelViewMatrix * vec4(0.0, position.yz, 1.0);
+    vec4 viewPos = modelViewMatrix * vec4(0.0, 0.0, position.z, 1.0);
     gl_Position = projectionMatrix * viewPos;
     vec4 clipStart = projectionMatrix * viewMatrix * vec4(start, 1.0);
     vec4 clipEnd = projectionMatrix * viewMatrix * vec4(end, 1.0);
     vec2 clipDir = normalize((clipEnd.xy / clipEnd.w - clipStart.xy / clipStart.w) * resolution.xy);
-    gl_Position.xy += vec2(-clipDir.y, clipDir.x) * gl_Position.w * position.x * shaftPixelWidth * 0.5 / resolution.xy;
+    gl_Position.xy = mix(clipStart.xy / clipStart.w, clipEnd.xy / clipEnd.w, position.y * 0.5) * gl_Position.w;
+    gl_Position.xy += vec2(-clipDir.y, clipDir.x) * position.x * shaftPixelWidth * 0.5 * pixelToNdcScale(gl_Position);
+
+    vec4 clipCenter = clipStart;
+    float d = arrowPixelSize.y * (1.0 + RADIUS_RATIO) - length(arrowPixelSize * vec2(0.5, RADIUS_RATIO));
+    clipCenter.xy += clipDir * (d + shaftPixelOffset + shaftPixelWidth * 0.5) * pixelToNdcScale(gl_Position);
+    centerPixel = (clipCenter.xy / gl_Position.w * 0.5 + 0.5) * resolution;
+    posPixel = (gl_Position.xy / gl_Position.w * 0.5 + 0.5) * resolution;
+    arrowDir = clipDir;
 }`;
 
 const glslShaftFragmentShader = 
-`uniform vec3 color;
+`varying vec2 centerPixel;
+varying vec2 posPixel;
+varying vec2 arrowDir;
+
+uniform float shaftPixelWidth;
+uniform vec3 color;
 
 void main() {
+    if (dot(arrowDir, posPixel - centerPixel) < 0.0 && length(posPixel - centerPixel) > shaftPixelWidth * 0.5)
+        discard;
     gl_FragColor = vec4(color, 1.0);
 }`;
 
 export class DimensioningArrowShaftMaterial extends ShaderMaterial {
     private static shader: any = {
         uniforms: {
-            resolution: { value: new Vector2(0, 0) },
+            resolution: { value: new Vector2() },
             start: { value: new Vector3() },
             end: { value: new Vector3() },
             shaftPixelWidth: { value: 10.0 },
-            color: { value: new Color(0x000000) },
+            shaftPixelOffset: { value: 10.0 },
+            arrowPixelSize: { value: new Vector2() },
+            color: { value: new Color() },
+        },
+        defines: {
+            RADIUS_RATIO: 0.5,
         },
         vertexShader: glslShaftVertexShader,
         fragmentShader: glslShaftFragmentShader,
@@ -183,6 +229,12 @@ export class DimensioningArrowShaftMaterial extends ShaderMaterial {
         if (parameters?.shaftPixelWidth !== undefined) {
             this.uniforms.shaftPixelWidth.value = parameters.shaftPixelWidth;
         }
+        if (parameters?.shaftPixelOffset !== undefined) {
+            this.uniforms.shaftPixelOffset.value = parameters.shaftPixelOffset;
+        }
+        if (parameters?.arrowPixelSize !== undefined) {
+            this.uniforms.arrowPixelSize.value.copy(parameters.arrowPixelSize);
+        }
         if (parameters?.color !== undefined) {
             this.uniforms.color.value = new Color(parameters.color);
         }
@@ -191,11 +243,18 @@ export class DimensioningArrowShaftMaterial extends ShaderMaterial {
 }
 
 const glslArrowVertexShader = 
-`uniform vec2 resolution;
+`varying vec2 arrowUv;
+varying vec2 centerPixel;
+varying vec2 posPixel;
+
+uniform vec2 resolution;
 uniform vec3 start;
 uniform vec3 end;
-uniform float arrowPixelWidth;
-uniform float arrowPixelHeight;
+uniform vec2 arrowPixelSize;
+
+vec2 pixelToNdcScale(vec4 hVec) {
+    return vec2(2.0 * hVec.w) / resolution.xy;
+}
 
 void main() {
     vec4 viewPos = modelViewMatrix * vec4(0.0, 0.0, position.z, 1.0);
@@ -203,26 +262,45 @@ void main() {
     vec4 clipStart = projectionMatrix * viewMatrix * vec4(start, 1.0);
     vec4 clipEnd = projectionMatrix * viewMatrix * vec4(end, 1.0);
     vec2 clipDir = normalize((clipEnd.xy / clipEnd.w - clipStart.xy / clipStart.w) * resolution.xy);
-    gl_Position.xy += clipDir * gl_Position.w * position.y * arrowPixelHeight / resolution.xy;
-    gl_Position.xy += vec2(-clipDir.y, clipDir.x) * gl_Position.w * position.x * arrowPixelWidth * 0.5 / resolution.xy;
+    gl_Position.xy += clipDir * position.y * arrowPixelSize.y * pixelToNdcScale(gl_Position);
+    gl_Position.xy += vec2(-clipDir.y, clipDir.x) * position.x * arrowPixelSize.x * 0.5 * pixelToNdcScale(gl_Position);
+
+    arrowUv = position.xy;
+
+    vec4 clipCenter = clipStart;
+    clipCenter.xy += clipDir * arrowPixelSize.y * (1.0 + RADIUS_RATIO) * pixelToNdcScale(gl_Position);
+    centerPixel = (clipCenter.xy / gl_Position.w * 0.5 + 0.5) * resolution;
+    posPixel = (gl_Position.xy / gl_Position.w * 0.5 + 0.5) * resolution;
 }`;
 
 const glslArrowFragmentShader = 
-`uniform vec3 color;
+`varying vec2 arrowUv;
+varying vec2 centerPixel;
+varying vec2 posPixel;
+
+uniform vec2 resolution;
+uniform vec2 arrowPixelSize;
+uniform vec3 color;
 
 void main() {
+    if (abs(arrowUv.x) > abs(arrowUv.y))
+        discard;
+    if (length(posPixel - centerPixel) < length(arrowPixelSize * vec2(0.5, RADIUS_RATIO)))
+        discard;
     gl_FragColor = vec4(color, 1.0);
 }`;
 
 export class DimensioningArrowMaterial extends ShaderMaterial {
     private static shader: any = {
         uniforms: {
-            resolution: { value: new Vector2(0, 0) },
+            resolution: { value: new Vector2() },
             start: { value: new Vector3() },
             end: { value: new Vector3() },
-            arrowPixelWidth: { value: 30.0 },
-            arrowPixelHeight: { value: 50.0 },
-            color: { value: new Color(0x000000) },
+            arrowPixelSize: { value: new Vector2() },
+            color: { value: new Color() },
+        },
+        defines: {
+            RADIUS_RATIO: 0.5,
         },
         vertexShader: glslArrowVertexShader,
         fragmentShader: glslArrowFragmentShader,
@@ -252,11 +330,8 @@ export class DimensioningArrowMaterial extends ShaderMaterial {
         if (parameters?.end !== undefined) {
             this.uniforms.end.value.copy(parameters.end);
         }
-        if (parameters?.arrowPixelWidth !== undefined) {
-            this.uniforms.arrowPixelWidth.value = parameters.arrowPixelWidth;
-        }
-        if (parameters?.arrowPixelHeight !== undefined) {
-            this.uniforms.arrowPixelHeight.value = parameters.arrowPixelHeight;
+        if (parameters?.arrowPixelSize !== undefined) {
+            this.uniforms.arrowPixelSize.value.copy(parameters.arrowPixelSize);
         }
         if (parameters?.color !== undefined) {
             this.uniforms.color.value = new Color(parameters.color);

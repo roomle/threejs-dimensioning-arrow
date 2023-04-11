@@ -86,7 +86,11 @@ export const helloCube = (canvas: any) => {
     meshTransformControl.visible = false;
     scene.add(meshTransformControl);
 
-    const arrow = new DimensioningArrow(new Vector3(1.5, 0, 1.5), new Vector3(3, 0, 0), { color: 0x000000 });
+    const arrow = new DimensioningArrow(new Vector3(1.5, 0, 1.5), new Vector3(3, 0, 0), { 
+        color: 0x000000,
+        arrowPixelWidth: 30.0,
+        arrowPixelHeight: 50.0, 
+    });
     scene.add(arrow);
 
     // @ts-ignore
