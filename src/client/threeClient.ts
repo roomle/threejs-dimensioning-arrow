@@ -1,3 +1,4 @@
+import { DimensioningArrow } from './dimensioningArrow';
 import {
     AxesHelper,
     BoxGeometry,
@@ -14,6 +15,7 @@ import {
     Scene,
     ShadowMaterial,
     sRGBEncoding,
+    Vector3,
     WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
@@ -83,6 +85,9 @@ export const helloCube = (canvas: any) => {
     meshTransformControl.attach(mesh);
     meshTransformControl.visible = false;
     scene.add(meshTransformControl);
+
+    const arrow = new DimensioningArrow(new Vector3(1.5, 0, 1.5), new Vector3(3, 0, 0), { color: 0x000000 });
+    scene.add(arrow);
 
     // @ts-ignore
     const stats = new Stats();
