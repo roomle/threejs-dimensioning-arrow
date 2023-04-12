@@ -36,12 +36,13 @@ export const dimensioning = (canvas: any) => {
     labelRenderer.setSize(window.innerWidth, window.innerHeight);
     labelRenderer.domElement.style.position = 'absolute';
     labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none';
     document.body.appendChild(labelRenderer.domElement);
 
     const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.y = 3;
     camera.position.z = 6;
-    const controls = new OrbitControls(camera, labelRenderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
 
     const scene = new Scene();
     scene.background = new Color(0xffffff);
@@ -75,7 +76,7 @@ export const dimensioning = (canvas: any) => {
     startMesh.position.set(-1.6, 0, 0);
     //startMesh.visible = false;
     scene.add(startMesh);
-    const startMeshTransformControl = new TransformControls(camera, labelRenderer.domElement);
+    const startMeshTransformControl = new TransformControls(camera, renderer.domElement);
     startMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
         controls.enabled = !event.value;
     });
@@ -86,7 +87,7 @@ export const dimensioning = (canvas: any) => {
     endMesh.position.set(1.6, 0, 0);
     //endMesh.visible = false;
     scene.add(endMesh);
-    const endMeshTransformControl = new TransformControls(camera, labelRenderer.domElement);
+    const endMeshTransformControl = new TransformControls(camera, renderer.domElement);
     endMeshTransformControl.addEventListener( 'dragging-changed', (event: any) => {
         controls.enabled = !event.value;
     });
@@ -117,6 +118,7 @@ export const dimensioning = (canvas: any) => {
     }
     gui.add(uiProperties, 'mesh transform control').onChange((value) => {
         startMeshTransformControl.visible = value;
+        endMeshTransformControl.visible = value;
     });
 
     window.addEventListener('resize', () => {
